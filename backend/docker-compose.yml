@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: najda
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+      # Postgres -- service name "postgres", not localhost, since this
+      # container talks to the postgres container over the compose network
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/najda
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+
+      # RabbitMQ -- service name "rabbitmq", same reasoning
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+
+      # Firebase -- see the volume mount below; this path is INSIDE the
+      # container, not wherever the file actually lives on your machine
+      FIREBASE_SERVICE_ACCOUNT_PATH: /secrets/firebase-service-account.json
+
+      # Bootstrap SUPER_ADMIN -- must stay set (see earlier discussion:
+      # the prod profile has no defaults, so a missing var fails startup
+      # entirely rather than silently skipping the bootstrap step)
+      SUPER_ADMIN_FIREBASE_UID: ${SUPER_ADMIN_FIREBASE_UID}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL}
+    volumes:
+      # Mount your real service account file (kept outside git, per
+      # .gitignore) into the path referenced above.
+      - ${FIREBASE_SERVICE_ACCOUNT_PATH_HOST:-./secrets/firebase-service-account.json}:/secrets/firebase-service-account.json:ro
+
+volumes:
+  postgres_data:
