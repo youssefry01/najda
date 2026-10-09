@@ -1,0 +1,101 @@
+name: Build test APK (private)
+
+# Manual run. Produces your own test build (env/.env.test, package
+# com.najda.mobile.test) as a workflow artifact -- nothing is released.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate the Android project (only if it is not committed)
+        run: |
+          if [ ! -d android ]; then ./scripts/setup_android.sh; fi
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          flutter gen-l10n
+
+      - name: Write test env file
+        env:
+          MOBILE_ENV_TEST: ${{ secrets.MOBILE_ENV_TEST }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MOBILE_ENV_TEST" ]; then
+            echo "::error::Secret MOBILE_ENV_TEST is empty -- paste the full contents of env/.env.test into it."
+            exit 1
+          fi
+          printf '%s\n' "$MOBILE_ENV_TEST" > env/.env.test
+
+      - name: Restore test keystore
+        env:
+          TEST_ANDROID_KEYSTORE_BASE64: ${{ secrets.TEST_ANDROID_KEYSTORE_BASE64 }}
+          TEST_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.TEST_ANDROID_KEYSTORE_PASSWORD }}
+          TEST_ANDROID_KEY_ALIAS: ${{ secrets.TEST_ANDROID_KEY_ALIAS }}
+          TEST_ANDROID_KEY_PASSWORD: ${{ secrets.TEST_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$TEST_ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::TEST_ANDROID_KEYSTORE_BASE64 is not set."
+            exit 1
+          fi
+
+          # Gradle resolves storeFile relative to mobile/android/ (rootProject.file),
+          # so the keystore must sit next to qa-key.properties.
+          echo "$TEST_ANDROID_KEYSTORE_BASE64" | base64 --decode \
+            > android/upload-keystore.jks
+
+          {
+            echo "storePassword=$TEST_ANDROID_KEYSTORE_PASSWORD"
+            echo "keyPassword=$TEST_ANDROID_KEY_PASSWORD"
+            echo "keyAlias=$TEST_ANDROID_KEY_ALIAS"
+            echo "storeFile=upload-keystore.jks"
+          } > android/qa-key.properties
+
+      - name: Create placeholder env files for the other flavors
+        run: touch env/.env.local env/.env.production
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Build test APK
+        run: |
+          flutter build apk \
+            --release \
+            --flavor qa \
+            --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: najda-test-apk
+          path: mobile/build/app/outputs/flutter-apk/app-qa-release.apk
+          retention-days: 90
+          if-no-files-found: error
