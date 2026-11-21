@@ -1,0 +1,82 @@
+% ======================================================================
+%  Project macros
+% ======================================================================
+
+% ---------- Placeholders (visible in red; list them with tools/placeholders.sh)
+\newif\ifshowplaceholders \showplaceholderstrue
+\newcommand{\fillme}[1]{\ifshowplaceholders\textcolor{najdared}{\sffamily\small[#1]}\fi}
+
+% ---------- Text conventions
+\newcommand{\role}[1]{\textsf{\small #1}}          % a user role, e.g. \role{Dispatcher}
+\newcommand{\code}[1]{\texttt{#1}}                  % inline code / identifiers
+\newcommand{\yes}{\textcolor{najdagreen}{\ding{51}}}
+\newcommand{\no}{\textcolor{najdagrey}{--}}
+
+% ---------- Figures
+%   \diagram{file}{caption}{label}        portrait figure, scaled to the text block
+%   \diagramwide{file}{caption}{label}    figure on a landscape page (wide diagrams)
+\newcommand{\diagram}[3]{%
+  \begin{figure}[!htbp]\centering
+    \includegraphics[width=\linewidth,height=0.76\textheight,keepaspectratio]{figures/diagrams/#1}
+    \caption{#2}\label{#3}
+  \end{figure}}
+\newcommand{\diagramwide}[3]{%
+  \begin{landscape}\begin{figure}[!htbp]\centering
+    \includegraphics[width=\linewidth,height=0.78\textheight,keepaspectratio]{figures/diagrams/#1}
+    \caption{#2}\label{#3}
+  \end{figure}\end{landscape}}
+
+% ---------- Screenshots
+%  Single screens (never taller than 62% of the page, so a tall phone screen can never overflow):
+%    \screenshot[width]{name}{caption}{label}        one screen
+%    \screenshotpair{name1}{name2}{caption}{label}   two screens side by side, same height
+%  Long (scrolling) phone screens, cut into consecutive panels by tools/split_screenshots.py:
+%    \scrollshot[panels]{name}{caption}{label}       N panels side by side (default 3)
+%  Each shows the image when the file exists, otherwise a framed placeholder.
+\newcommand{\shotframe}[1]{{\setlength{\fboxsep}{0pt}\setlength{\fboxrule}{0.4pt}\color{najdaline}\fbox{\color{black}#1}}}
+
+\newcommand{\screenshot}[4][0.34\linewidth]{%
+  \begin{figure}[!htbp]\centering
+    \IfFileExists{figures/screenshots/#2.png}{%
+      \shotframe{\includegraphics[width=#1,height=0.62\textheight,keepaspectratio]{figures/screenshots/#2.png}}}{%
+      \ifshowplaceholders
+      \fbox{\parbox[c][5.2cm][c]{#1}{\centering\sffamily\small\color{najdagrey}%
+        Screenshot to be added\\[2pt]\texttt{figures/screenshots/\detokenize{#2}.png}}}\fi}
+    \caption{#3}\label{#4}
+  \end{figure}}
+
+\newcommand{\screenshotpair}[4]{%
+  \begin{figure}[!htbp]\centering
+    \mbox{\foreach \f [count=\k] in {#1,#2}{%
+      \vtop{\hbox{\IfFileExists{figures/screenshots/\f.png}{%
+        \shotframe{\includegraphics[height=0.58\textheight,width=0.44\linewidth,keepaspectratio]{figures/screenshots/\f.png}}}{%
+        \ifshowplaceholders\fbox{\parbox[c][6cm][c]{0.40\linewidth}{\centering\sffamily\small\color{najdagrey}%
+          Screenshot to be added\\[2pt]\texttt{\expandafter\detokenize\expandafter{\f}.png}}}\fi}}}%
+      \ifnum\k=1\hspace{0.04\linewidth}\fi}}
+    \caption{#3}\label{#4}
+  \end{figure}}
+
+\newlength{\shotH}\newlength{\shotT}\newlength{\shotB}\newlength{\shotW}
+\newcommand{\scrollshot}[4][0.5]{%
+  \begin{figure}[!htbp]\centering
+    \IfFileExists{figures/screenshots/#2.png}{%
+      \settoheight{\shotH}{\includegraphics{figures/screenshots/#2.png}}%
+      \gdef\shotN{1}\foreach \c in {#1}{\xdef\shotN{\the\numexpr\shotN+1\relax}}%
+      \setlength{\shotW}{\dimexpr(\linewidth-0.03\linewidth*(\shotN-1))/\shotN-6pt\relax}%
+      \gdef\shotprev{0}%
+      \mbox{\foreach \c [count=\i] in {#1,1}{%
+        \pgfmathsetlength{\shotT}{\shotprev*\shotH}%
+        \pgfmathsetlength{\shotB}{(1-\c)*\shotH}%
+        \edef\shotopts{trim=0pt \the\shotB\space 0pt \the\shotT,clip,width=\the\shotW}%
+        \vtop{\hbox{\shotframe{\expandafter\includegraphics\expandafter[\shotopts]{figures/screenshots/#2.png}}}}%
+        \xdef\shotprev{\c}%
+        \ifnum\i<\shotN\relax\hspace{0.03\linewidth}\fi}}}{%
+      \ifshowplaceholders\fbox{\parbox[c][7cm][c]{0.6\linewidth}{\centering\sffamily\small\color{najdagrey}%
+        Screenshot to be added\\[2pt]\texttt{figures/screenshots/\detokenize{#2}.png}}}\fi}
+    \caption{#3}\label{#4}
+  \end{figure}}
+
+% ---------- Use-case specifications (generated appendix)
+\newcommand{\ucheading}[2]{\par\vspace{1.3em}\noindent{\sffamily\najdasemibold\large\color{najdablue}#1\enspace\textendash\enspace #2}\par\nobreak
+  \vspace{2pt}\noindent{\color{najdaline}\rule{\linewidth}{0.5pt}}\par\nobreak\vspace{5pt}}
+\newcommand{\ucflow}[1]{\par\vspace{0.7em}\noindent{\sffamily\najdasemibold\small\color{najdagrey}#1}\par\nobreak\vspace{2pt}}
